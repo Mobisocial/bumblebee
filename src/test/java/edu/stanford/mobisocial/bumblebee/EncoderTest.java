@@ -3,10 +3,13 @@ package edu.stanford.mobisocial.bumblebee;
 import java.lang.ref.SoftReference;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import junit.framework.TestCase;
@@ -25,13 +28,14 @@ import edu.stanford.mobisocial.bumblebee.util.Base64;
 
 public class EncoderTest extends TestCase {
     static final String TEST_APP = "junit.test";
-    static final String FEED_NAME = UUID.randomUUID().toString();
 
     public void testDungbeetleEncoder() {
-        User sender = new TestUser();
-        User recipient = new TestUser();
-        DungbeetleObjEncoder objEncoder = new DungbeetleObjEncoder(sender);
-        DungbeetleObjEncoder objDecoder = new DungbeetleObjEncoder(recipient);
+        User sender = new MockRSAUser();
+        User recipient = new MockRSAUser();
+        MockTransportIdentityProvider identityProvider = new MockTransportIdentityProvider(sender);
+        identityProvider.registerUser(recipient);
+        DungbeetleObjEncoder objEncoder = new DungbeetleObjEncoder(identityProvider, sender);
+        DungbeetleObjEncoder objDecoder = new DungbeetleObjEncoder(identityProvider, recipient);
         PreparedObj prepared = new TestPreparedObj(sender, Collections.singletonList(recipient));
 
         SignedObj signed = null;
@@ -45,6 +49,7 @@ public class EncoderTest extends TestCase {
 
         assertEquals(prepared.getAppId(), signed.getAppId());
         assertEquals(prepared.getFeedName(), signed.getFeedName());
+        assertEquals(prepared.getSender().getId(), signed.getSender().getId());
     }
 
     class TestPreparedObj implements PreparedObj {
@@ -144,7 +149,7 @@ public class EncoderTest extends TestCase {
     }
 }
 
-class TestUser implements User {
+class MockRSAUser implements User {
     private final KeyPair mKeyPair;
     private final String mId;
 
@@ -159,7 +164,7 @@ class TestUser implements User {
         }
     }
 
-    public TestUser() {
+    public MockRSAUser() {
         mKeyPair = generateKeyPair();
         mId = RSACrypto.makePersonIdForPublicKey(mKeyPair.getPublic());
     }
@@ -183,5 +188,56 @@ class TestUser implements User {
             return Base64.encodeToString(mKeyPair.getPrivate().getEncoded(), false);
         }
         return null;
+    }
+}
+
+class MockTransportIdentityProvider implements TransportIdentityProvider {
+    private final User mOwner;
+    private final Map<String, User> mKnownUsers = new HashMap<String, User>();
+
+    public MockTransportIdentityProvider(User owner) {
+        mOwner = owner;
+        mKnownUsers.put(owner.getId(), owner);
+    }
+
+    public void registerUser(User user) {
+        mKnownUsers.put(user.getId(), user);
+    }
+
+    @Override
+    public RSAPublicKey userPublicKey() {
+        return RSACrypto.publicKeyFromString(mOwner.getAttribute(User.ATTR_RSA_PUBLIC_KEY));
+    }
+
+    @Override
+    public RSAPrivateKey userPrivateKey() {
+        return RSACrypto.privateKeyFromString(mOwner.getAttribute(User.ATTR_RSA_PRIVATE_KEY));
+    }
+
+    @Override
+    public String userPersonId() {
+        return mOwner.getId();
+    }
+
+    @Override
+    public RSAPublicKey publicKeyForPersonId(String id) {
+        if (!mKnownUsers.containsKey(id)) {
+            return null;
+        }
+        String key = mKnownUsers.get(id).getAttribute(User.ATTR_RSA_PUBLIC_KEY);
+        if (key == null) {
+            return null;
+        }
+        return RSACrypto.publicKeyFromString(key);
+    }
+
+    @Override
+    public String personIdForPublicKey(RSAPublicKey key) {
+        return RSACrypto.makePersonIdForPublicKey(key);
+    }
+
+    @Override
+    public User userForPersonId(String id) {
+        return mKnownUsers.get(id);
     }
 }

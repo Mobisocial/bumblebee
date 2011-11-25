@@ -30,10 +30,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import edu.stanford.mobisocial.bumblebee.CryptoException;
+import edu.stanford.mobisocial.bumblebee.TransportIdentityProvider;
 import edu.stanford.mobisocial.bumblebee.util.Util;
 
 /**
- * The classic format of a Dungbeetle object.
+ * Encodes/decodes objects in the classic Dungbeetle format.
  * 
  * <p>Features:
  * <ul>
@@ -43,12 +44,14 @@ import edu.stanford.mobisocial.bumblebee.util.Util;
  *
  */
 public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
+    private final TransportIdentityProvider mIdentityProvider;
     private static final int AES_Key_Size = 128;
     private static KeyGenerator mKeyGenerator;
     private final User mLocalUser;
 
-    public DungbeetleObjEncoder(User localUser) {
+    public DungbeetleObjEncoder(TransportIdentityProvider identityProvider, User localUser) {
         mLocalUser = localUser;
+        mIdentityProvider = identityProvider;
     }
 
     public DungbeetleEncodedObj encodeObj(PreparedObj obj) throws ObjEncodingException {
@@ -171,9 +174,11 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
             in.readFully(sigIn);
 
             // Decrypt digest
-            RSAPublicKey sender = obj.getSenderPublicKey();
+            RSAPublicKey senderKey = obj.getSenderPublicKey();
+            String senderId = mIdentityProvider.personIdForPublicKey(senderKey);
+            User sender = mIdentityProvider.userForPersonId(senderId);
             Cipher sigcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            sigcipher.init(Cipher.DECRYPT_MODE, sender);
+            sigcipher.init(Cipher.DECRYPT_MODE, senderKey);
             byte[] sigBytes = sigcipher.doFinal(sigIn);
 
             MessageDigest sha1 = MessageDigest.getInstance("SHA1");
@@ -245,7 +250,7 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
 
             byte[] plainBytes = plainOut.toByteArray();
             String plainText = new String(plainBytes, "UTF8");
-            return new DungbeetleSignedObj(plainText);
+            return new DungbeetleSignedObj(sender, plainText);
         } catch (Exception e) {
             throw new ObjEncodingException(e.getMessage());
         }
@@ -311,10 +316,12 @@ class DungbeetleSignedObj implements SignedObj {
     static final String KEY_RAW = "data";
 
     private final JSONObject mJson;
+    private final User mSender;
 
-    public DungbeetleSignedObj(String plainText) throws IllegalArgumentException {
+    public DungbeetleSignedObj(User sender, String plainText) throws IllegalArgumentException {
         try {
             mJson = new JSONObject(plainText);
+            mSender = sender;
         } catch (JSONException e) {
             throw new IllegalArgumentException(e);
         }
@@ -366,8 +373,7 @@ class DungbeetleSignedObj implements SignedObj {
     }
 
     public User getSender() {
-        // TODO Auto-generated method stub
-        return null;
+        return mSender;
     }
 
     public long getSequenceNumber() {

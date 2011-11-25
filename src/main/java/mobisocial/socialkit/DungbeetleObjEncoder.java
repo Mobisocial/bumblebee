@@ -150,7 +150,7 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
         }
     }
 
-    private List<RSAPublicKey> getPublicKeys(List<User> recipients) throws ObjEncodingException {
+    public static List<RSAPublicKey> getPublicKeys(List<User> recipients) throws ObjEncodingException {
         List<RSAPublicKey> keys = new ArrayList<RSAPublicKey>(recipients.size());
         for (User r : recipients) {
             String str = r.getAttribute(User.ATTR_RSA_PUBLIC_KEY);

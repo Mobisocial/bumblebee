@@ -13,6 +13,8 @@ import java.io.File;
 import java.util.*;
 import java.security.KeyFactory;
 import java.security.spec.X509EncodedKeySpec;
+
+import mobisocial.socialkit.User;
 import edu.stanford.mobisocial.bumblebee.util.*;
 
 
@@ -97,6 +99,10 @@ public class Main {
                 }
                 public String personIdForPublicKey(RSAPublicKey key){
                     return Util.makePersonIdForPublicKey(key);
+                }
+                @Override
+                public User userForPersonId(String id) {
+                    return null;
                 }
             };
         ConnectionStatus status = new ConnectionStatus(){

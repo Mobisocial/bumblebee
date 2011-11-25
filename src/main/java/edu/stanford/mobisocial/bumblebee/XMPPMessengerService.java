@@ -198,7 +198,7 @@ public class XMPPMessengerService extends MessengerService {
                         System.err.println("WTF! person id in message does not match sender!.");
                         return;
                     }
-                    RSAPublicKey pubKey = identity().publicKeyForPersonId(id);
+                    PublicKey pubKey = identity().publicKeyForPersonId(id);
                     if (pubKey == null) {
                         System.err.println("WTF! message from unrecognized sender! " + id);
                         return;

@@ -134,7 +134,7 @@ public class Main {
 				curLine = in.readLine();
 				final String line = curLine;
 				if (!(curLine.equals(""))) {
-					m.sendMessage(new OutgoingMessage() {
+					/*m.sendMessage(new OutgoingMessage() {
                             public List<RSAPublicKey> toPublicKeys() {
                                 return otherKeys;
                             }
@@ -142,20 +142,20 @@ public class Main {
                                 return line;
                             }
                             public void onCommitted() {
-                            	/* not needed for test */
+                            	// not needed for test
                             }
 							public void onEncoded(byte[] encoded) {
-                            	/* not needed for test */
+                            	// not needed for test
 								
 							}
 							public byte[] getEncoded() {
-                            	/* not needed for test */
+                            	// not needed for test
 								return null;
 							}
 							public long getLocalUniqueId() {
 								return 0;
 							}
-                        });
+                        });*/
 				}
 			}
 		} catch (IOException e) {

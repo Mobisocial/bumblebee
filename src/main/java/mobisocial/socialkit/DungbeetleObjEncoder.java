@@ -13,6 +13,8 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -56,10 +58,12 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
 
     public DungbeetleEncodedObj encodeObj(PreparedObj obj) throws ObjEncodingException {
         byte[] plain = objAsByteArray(obj);
+        
         if (plain == null) {
             throw new ObjEncodingException("Error converting obj to byte array");
         }
         List<RSAPublicKey> toPubKeys = getPublicKeys(obj.getRecipients());
+
         try {
             byte[] aesKey = makeAESKey();
             SecretKeySpec aesSpec = new SecretKeySpec(aesKey, "AES");

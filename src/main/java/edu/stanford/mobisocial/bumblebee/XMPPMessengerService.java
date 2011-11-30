@@ -1,5 +1,8 @@
 package edu.stanford.mobisocial.bumblebee;
 import edu.stanford.mobisocial.bumblebee.util.Base64;
+import mobisocial.socialkit.DungbeetleObjEncoder;
+import mobisocial.socialkit.User;
+
 import org.jivesoftware.smack.filter.PacketTypeFilter;
 import org.jivesoftware.smack.*;
 import org.jivesoftware.smack.packet.Message;
@@ -31,10 +34,11 @@ public class XMPPMessengerService extends MessengerService {
                         OutgoingMessage m = mSendQ.peek();
                         if (connectedToInternet() && (m != null) && connected()) {
                             mSendQ.poll();
-                            String plain = m.contents();
                             try {
                                 XEP0033Header header = new XEP0033Header();
-                                for(RSAPublicKey pubKey : m.toPublicKeys()){
+                                List<User> recipients = m.contents().getRecipients();
+                                List<RSAPublicKey> keys = DungbeetleObjEncoder.getPublicKeys(recipients);
+                                for(RSAPublicKey pubKey : keys){
                                     String jid = identity().personIdForPublicKey(pubKey) 
                                         + "@" + XMPP_SERVER;
                                     header.addAddress("to", jid);
@@ -48,7 +52,7 @@ public class XMPPMessengerService extends MessengerService {
                                 msg.addExtension(header);
                                 mConnection.sendPacket(msg);
                                 m.onCommitted();
-                            } catch (CryptoException e) {
+                            } catch (Exception e) {
                                 e.printStackTrace(System.err);
                             }
                         } 

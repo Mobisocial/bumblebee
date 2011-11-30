@@ -107,46 +107,6 @@ public class EncoderTest extends TestCase {
             return TEST_APP;
         }
     }
-
-    class OutgoingFeedObjectMsg extends OutgoingMsg {
-        public OutgoingFeedObjectMsg(List<User> recipients, JSONObject json){
-            //mPubKeys = mIdent.publicKeysForContactIds(ids);
-            //this obj is not yet encoded
-            mBody = json.toString();
-        }
-    }
-
-    abstract class OutgoingMsg implements OutgoingMessage {
-        protected SoftReference<byte[]> mEncoded;
-        protected String mBody;
-        protected List<RSAPublicKey> mPubKeys;
-        protected long mObjectId;
-        protected JSONObject mJson;
-        protected byte[] mRaw;
-        protected boolean mDeleteOnCommit;
-        protected OutgoingMsg() {
-            mObjectId = 0;
-        }
-        @Override
-        public long getLocalUniqueId() {
-            return mObjectId;
-        }
-        public List<RSAPublicKey> toPublicKeys(){ return mPubKeys; }
-        public String contents(){ return mBody; }
-        public String toString(){ return "[Message with body: " + mBody + " to " +
-                toPublicKeys().size() + " recipient(s) ]"; }
-        public void onCommitted() {
-        }
-
-        @Override
-        public void onEncoded(byte[] encoded) {
-        }
-
-        @Override
-        public byte[] getEncoded() {
-            return null;
-        }
-    }
 }
 
 class MockRSAUser implements User {

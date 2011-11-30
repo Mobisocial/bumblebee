@@ -11,6 +11,10 @@ import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import mobisocial.socialkit.DungbeetleObjEncoder;
+import mobisocial.socialkit.EncodedObj;
+import mobisocial.socialkit.ObjEncoder;
+
 import org.apache.commons.io.output.NullOutputStream;
 
 public class MessageFormat {
@@ -160,89 +164,11 @@ public class MessageFormat {
 		byte[] encoded = m.getEncoded();
 		if(encoded != null)
 			return encoded;
-		String s = m.contents();
-		List<RSAPublicKey> toPubKeys = m.toPublicKeys();
+		ObjEncoder<?> encoder = new DungbeetleObjEncoder(mIdent, null);
 		try {
-			byte[] plain = s.getBytes("UTF8");
-			byte[] aesKey = makeAESKey();
-			SecretKeySpec aesSpec = new SecretKeySpec(aesKey, "AES");
-
-			ByteArrayOutputStream bo = new ByteArrayOutputStream();
-			DataOutputStream out = new DataOutputStream(bo);
-
-			byte[] userPidBytes = mIdent.userPublicKey().getEncoded();
-			out.writeShort(userPidBytes.length);
-			out.write(userPidBytes);
-
-			out.writeShort(toPubKeys.size());
-
-			// Encrypt the AES key with each key in toPubKeys
-			for (RSAPublicKey pubk : toPubKeys) {
-				Cipher cipher = Cipher.getInstance("RSA");
-				cipher.init(Cipher.ENCRYPT_MODE, pubk);
-				ByteArrayOutputStream ks = new ByteArrayOutputStream();
-				CipherOutputStream os = new CipherOutputStream(ks, cipher);
-				os.write(aesKey);
-				os.close();
-				byte[] aesKeyCipherBytes = ks.toByteArray();
-
-				String pid = mIdent.personIdForPublicKey(pubk);
-				byte[] toPersonIdBytes = pid.getBytes("UTF8");
-				out.writeShort(toPersonIdBytes.length);
-				out.write(toPersonIdBytes);
-
-				out.writeShort(aesKeyCipherBytes.length);
-				out.write(aesKeyCipherBytes);
-			}
-
-			// Generate Initialization Vector for AES CBC mode
-			SecureRandom random = new SecureRandom();
-			byte[] iv = new byte[16];
-			random.nextBytes(iv);
-			out.writeShort(iv.length);
-			out.write(iv);
-
-			// Use AES key to encrypt the body
-			IvParameterSpec ivspec = new IvParameterSpec(iv);
-			Cipher aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			aesCipher.init(Cipher.ENCRYPT_MODE, aesSpec, ivspec);
-			ByteArrayOutputStream cipherOut = new ByteArrayOutputStream();
-			CipherOutputStream aesOut = new CipherOutputStream(cipherOut,
-					aesCipher);
-			aesOut.write(plain);
-			plain = null;
-			aesOut.close();
-			aesOut = null;
-			out.writeInt(cipherOut.size());
-			cipherOut.writeTo(out);
-			cipherOut = null;
-			out.close();
-			bo.close();
-
-			MessageDigest sha1 = MessageDigest.getInstance("SHA1");
-			DigestOutputStream dos = new DigestOutputStream(new NullOutputStream(), sha1);
-			bo.writeTo(dos);
-			dos.flush();
-			byte[] digest = sha1.digest();
-			// Encrypt digest
-			Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-			cipher.init(Cipher.ENCRYPT_MODE, mIdent.userPrivateKey());
-			byte[] sigBytes = cipher.doFinal(digest);
-
-			ByteArrayOutputStream so = new ByteArrayOutputStream();
-			DataOutputStream finalOut = new DataOutputStream(so);
-			finalOut.writeShort(sigBytes.length);
-			finalOut.write(sigBytes);
-			bo.writeTo(finalOut);
-			bo = null;
-			finalOut.close();
-			
-			encoded = so.toByteArray(); 
-			finalOut = null;
-			so = null;
-			m.onEncoded(encoded);
-			return encoded;
-
+    		EncodedObj enc = encoder.encodeObj(m.contents());
+    		m.onEncoded(enc.getEncoding());
+    		return enc.getEncoding();
 		} catch (Exception e) {
 			e.printStackTrace(System.err);
 			throw new CryptoException(e);

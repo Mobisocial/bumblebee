@@ -1,53 +1,38 @@
 package edu.stanford.mobisocial.bumblebee;
 
-import java.beans.PropertyEditorManager;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.SocketException;
-import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.RSAKeyGenParameterSpec;
-import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.SecretKeySpec;
+import mobisocial.socialkit.DungbeetleObjEncoder;
+import mobisocial.socialkit.PreparedObj;
+import mobisocial.socialkit.User;
 
-import org.apache.commons.io.IOUtils;
-import org.jivesoftware.smack.packet.Message;
-import org.xbill.DNS.CNAMERecord;
-
+import com.rabbitmq.client.AMQP.BasicProperties;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConfirmListener;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.MessageProperties;
 import com.rabbitmq.client.QueueingConsumer;
 import com.rabbitmq.client.ReturnListener;
-import com.rabbitmq.client.AMQP.BasicProperties;
 import com.rabbitmq.client.ShutdownSignalException;
 
 import edu.stanford.mobisocial.bumblebee.util.Base64;
@@ -100,7 +85,7 @@ public class RabbitMQMessengerService extends MessengerService {
 		super(ident, status);
         mFormat = new MessageFormat(ident);
         
-		exchangeKey = new String(encodeRSAPublicKey(ident.userPublicKey()));
+		exchangeKey = new String(encodeRSAPublicKey((RSAPublicKey)ident.userPublicKey()));
 		queueName = exchangeKey;
 		factory = new ConnectionFactory();
 	    factory.setHost("pepperjack.stanford.edu");
@@ -197,9 +182,12 @@ public class RabbitMQMessengerService extends MessengerService {
 											continue next_message;
 														                    	
 										byte[] cyphered;
+	                                    List<RSAPublicKey> keys;
 										try {
+										    System.out.println("Sending msg " + m.contents());
+										    keys = DungbeetleObjEncoder.getPublicKeys(m.contents().getRecipients());
 											cyphered = mFormat.encodeOutgoingMessage(m);
-					                    } catch(CryptoException e) {
+					                    } catch(Exception e) {
 											//TODO: should mark committed?
 
 					                    	//just skip on crypto exception when sending
@@ -211,7 +199,6 @@ public class RabbitMQMessengerService extends MessengerService {
 										long seq = outChannel.getNextPublishSeqNo();
 					                    pending.put(seq, m);
 
-				                        List<RSAPublicKey> keys = m.toPublicKeys();
 				                        String exchange = routes.get(keys);
 				                        if(exchange == null) {
 				                			MessageDigest sha1;
@@ -232,7 +219,8 @@ public class RabbitMQMessengerService extends MessengerService {
 					                    	}
 					                    	routes.put(keys, exchange);
 				                        }
-										signalConnectionStatus("Sending " + cyphered.length + " bytes", null);
+										signalConnectionStatus("Sending " + cyphered.length + " bytes"
+										        + " to " + keys.size() + " keys", null);
 				                        outChannel.basicPublish(exchange, "", true, false, null, cyphered);
 					                }
 					        	} catch(IOException e) {
@@ -412,6 +400,9 @@ public class RabbitMQMessengerService extends MessengerService {
 		}
 	}
 	static class FixedIdentityProvider implements TransportIdentityProvider {
+	    RSAPublicKey mPub;
+        RSAPrivateKey mPriv;
+
 		FixedIdentityProvider(RSAPublicKey pub, RSAPrivateKey priv) {
 			mPub = pub;
 			mPriv = priv;
@@ -435,8 +426,10 @@ public class RabbitMQMessengerService extends MessengerService {
 		public String personIdForPublicKey(RSAPublicKey key) {
 			return Util.makePersonIdForPublicKey(key);
 		}
-		RSAPublicKey mPub;
-		RSAPrivateKey mPriv;
+
+		public User userForPersonId(String id) {
+		    return null;
+		}
 	}
 	static class DummyConnectionStatus implements ConnectionStatus {
 		public boolean isConnected() {
@@ -499,7 +492,7 @@ public class RabbitMQMessengerService extends MessengerService {
 				ms.addMessageListener(new MessageListener() {
 					public void onMessage(IncomingMessage m) {
 						System.out.println("message from: " + m.from());
-						System.out.println(m.contents());
+						System.out.println("" + m.contents());
 					}
 				});
 			} else if(args[0].equals("--from")) {
@@ -539,8 +532,8 @@ public class RabbitMQMessengerService extends MessengerService {
 							return mEncoded;
 						}
 						
-						public String contents() {
-							return new String(message);
+						public PreparedObj contents() {
+							return null; // TODO: new DummyObj(message)
 						}
 					});
 				}

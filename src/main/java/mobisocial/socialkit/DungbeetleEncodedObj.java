@@ -1,10 +1,11 @@
 package mobisocial.socialkit;
 
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
+import java.nio.ByteBuffer;
 import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
+
+import edu.stanford.mobisocial.bumblebee.TransportIdentityProvider;
 
 public class DungbeetleEncodedObj implements EncodedObj {
     private final byte[] mEncoding;
@@ -13,21 +14,20 @@ public class DungbeetleEncodedObj implements EncodedObj {
         mEncoding = encoding;
     }
 
-    public long getType() {
+    public long getEncodingType() {
         return 0x0; // The classic Dungbeetle format has no encoding marker.
     }
 
-    public byte[] getEncoding() {
+    public byte[] getEncoded() {
         return mEncoding;
     }
 
     public RSAPublicKey getSenderPublicKey() {
         try {
-            DataInputStream in = new DataInputStream(
-                    new ByteArrayInputStream(mEncoding));
-            short sigLen = in.readShort();
-            in.skipBytes(sigLen);
-            short fromPidLen = in.readShort();
+            ByteBuffer in = ByteBuffer.wrap(mEncoding);
+            short sigLen = in.getShort();
+            in.position(in.position() + sigLen);
+            short fromPidLen = in.getShort();
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             byte[] dest = new byte[fromPidLen];
             System.arraycopy(mEncoding, 2 + sigLen + 2, dest, 0, fromPidLen);
@@ -36,5 +36,11 @@ public class DungbeetleEncodedObj implements EncodedObj {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public long getHash() {
+        ByteBuffer buf = ByteBuffer.wrap(mEncoding);
+        buf.position(2); // signature length
+        return buf.getLong();
     }
 }

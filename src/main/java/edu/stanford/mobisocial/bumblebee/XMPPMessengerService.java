@@ -1,18 +1,28 @@
 package edu.stanford.mobisocial.bumblebee;
-import edu.stanford.mobisocial.bumblebee.util.Base64;
+import java.security.interfaces.RSAPublicKey;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
+
 import mobisocial.socialkit.DungbeetleObjEncoder;
+import mobisocial.socialkit.ObjEncodingException;
+import mobisocial.socialkit.SignedObj;
 import mobisocial.socialkit.User;
 
+import org.jivesoftware.smack.AccountManager;
+import org.jivesoftware.smack.ConnectionConfiguration;
+import org.jivesoftware.smack.ConnectionListener;
+import org.jivesoftware.smack.PacketListener;
+import org.jivesoftware.smack.XMPPConnection;
+import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.filter.PacketTypeFilter;
-import org.jivesoftware.smack.*;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Packet;
-
-import java.security.PublicKey;
-import java.security.interfaces.RSAPublicKey;
-import java.util.*;
-import java.util.concurrent.*;
 import org.jivesoftware.smack.packet.PacketExtension;
+
+import edu.stanford.mobisocial.bumblebee.util.Base64;
 
 public class XMPPMessengerService extends MessengerService {
 
@@ -43,7 +53,7 @@ public class XMPPMessengerService extends MessengerService {
                                         + "@" + XMPP_SERVER;
                                     header.addAddress("to", jid);
                                 }
-                                byte[] cyphered = mFormat.encodeOutgoingMessage(m);
+                                byte[] cyphered = mFormat.encodeOutgoingMessage(m).getEncoded();
                                 String msgText = Base64.encodeToString(cyphered, false);
                                 Message msg = new Message();
                                 msg.setFrom(mUsername + "@" + XMPP_SERVER);
@@ -196,7 +206,7 @@ public class XMPPMessengerService extends MessengerService {
                     final String jid = m.getFrom();
                     final byte[] body = Base64.decode(m.getBody());
                     if(body == null) throw new RuntimeException("Could not decode message.");
-
+                    /*
                     String id = mFormat.getMessagePersonId(body);
                     if (id == null || !(jid.startsWith(id))) {
                         System.err.println("WTF! person id in message does not match sender!.");
@@ -206,28 +216,28 @@ public class XMPPMessengerService extends MessengerService {
                     if (pubKey == null) {
                         System.err.println("WTF! message from unrecognized sender! " + id);
                         return;
-                    }
+                    }*/
                     try{
-	                    final byte[] signature = mFormat.getMessageSignature(body);
-                        final String contents = mFormat.decodeIncomingMessage(body);
+                        final SignedObj contents = mFormat.decodeIncomingMessage(body);
+                        String id = contents.getSender().getId();
                         int i = jid.indexOf("@");
                         final String from = i > -1 ? jid.substring(0, i) : jid;
                         signalMessageReceived(
                             new IncomingMessage() {
                                 public String from() { return from; }
-                                public String contents() { return contents; }
-                                public String toString() { return contents(); }
-                                public byte[] encoded() { return body; }
+                                public SignedObj contents() { return contents; }
+                                public String toString() {
+                                    StringBuilder b = new StringBuilder("[");
+                                    b.append("type: ").append(contents.getType())
+                                    .append(", json: " + contents.getJson());
+                                    b.append("]");
+                                    return b.toString();
+                                }
 	                            public long hash() { 
-	                            	try {
-										return mFormat.extractHash(body);
-									} catch (CryptoException e) {
-										return new Random().nextLong();
-									} 
+	                            	return contents.getHash();
 	                            }
                            });
-                    }
-                    catch(CryptoException e){
+                    } catch (ObjEncodingException e) {
                         System.err.println("Failed in processing incoming message! Reason:");
                         e.printStackTrace(System.err);
                     }
@@ -257,7 +267,8 @@ public class XMPPMessengerService extends MessengerService {
 		return connectionStatus().isConnected();
 	}
 
-	private void assertConnected() {
+	@SuppressWarnings("unused")
+    private void assertConnected() {
 		if (!connected()) {
 			throw new IllegalStateException("Not connected!");
 		}

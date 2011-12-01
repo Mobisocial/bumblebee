@@ -13,8 +13,6 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -50,6 +48,11 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
     private static final int AES_Key_Size = 128;
     private static KeyGenerator mKeyGenerator;
     private final User mLocalUser;
+
+    public DungbeetleObjEncoder(TransportIdentityProvider identityProvider) {
+        mIdentityProvider = identityProvider;
+        mLocalUser = identityProvider.userForPersonId(identityProvider.userPersonId());
+    }
 
     public DungbeetleObjEncoder(TransportIdentityProvider identityProvider, User localUser) {
         mLocalUser = localUser;
@@ -169,7 +172,7 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
     public SignedObj decodeObj(DungbeetleEncodedObj obj) throws ObjEncodingException {
         try {
             // TODO: signature wrapped vs. not
-            byte[] s = obj.getEncoding();
+            byte[] s = obj.getEncoded();
             ByteArrayInputStreamWithPos bi = new ByteArrayInputStreamWithPos(s);
             DataInputStream in = new DataInputStream(bi);
 
@@ -196,6 +199,9 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
             short fromPidLen = in.readShort();
             in.skipBytes(fromPidLen);
 
+            /**
+             * TODO: support multiple private keys in a keystore (userstore)
+             */
             byte[] userPidBytes = mLocalUser.getId().getBytes();
             short numKeys = in.readShort();
             byte[] keyBytesE = null;
@@ -226,6 +232,9 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
             // Decrypt AES key
             Cipher keyCipher = Cipher.getInstance("RSA");
             String pkString = mLocalUser.getAttribute(User.ATTR_RSA_PRIVATE_KEY);
+            if (pkString == null) {
+                throw new ObjEncodingException("Failed to get private key for " + mLocalUser);
+            }
             RSAPrivateKey pkey = RSACrypto.privateKeyFromString(pkString);
             keyCipher.init(Cipher.DECRYPT_MODE, pkey);
             CipherInputStream is = new CipherInputStream(
@@ -254,8 +263,9 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
 
             byte[] plainBytes = plainOut.toByteArray();
             String plainText = new String(plainBytes, "UTF8");
-            return new DungbeetleSignedObj(sender, plainText);
+            return new DungbeetleSignedObj(sender, plainText, obj.getHash());
         } catch (Exception e) {
+            e.printStackTrace();
             throw new ObjEncodingException(e.getMessage());
         }
     }
@@ -308,6 +318,18 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
         SecretKey key = mKeyGenerator.generateKey();
         return key.getEncoded();
     }
+
+    @Override
+    public boolean supportsEncoding(long encodingVersion) {
+        // Dungbeetle messages have no versioning information.
+        // so... yes!
+        return true;
+    }
+
+    @Override
+    public DungbeetleEncodedObj getEncodedObj(byte[] encoded) {
+        return new DungbeetleEncodedObj(encoded);
+    }
 }
 
 class DungbeetleSignedObj implements SignedObj {
@@ -319,11 +341,13 @@ class DungbeetleSignedObj implements SignedObj {
     static final String KEY_JSON_INT_KEY = "obj_intkey";
     static final String KEY_RAW = "data";
 
+    private final long mHash;
     private final JSONObject mJson;
     private final User mSender;
 
-    public DungbeetleSignedObj(User sender, String plainText) throws IllegalArgumentException {
+    public DungbeetleSignedObj(User sender, String plainText, long hash) throws IllegalArgumentException {
         try {
+            mHash = hash;
             mJson = new JSONObject(plainText);
             mSender = sender;
         } catch (JSONException e) {
@@ -364,8 +388,7 @@ class DungbeetleSignedObj implements SignedObj {
     }
 
     public long getHash() {
-        // TODO Auto-generated method stub
-        return 0;
+        return mHash;
     }
 
     public String getAppId() {

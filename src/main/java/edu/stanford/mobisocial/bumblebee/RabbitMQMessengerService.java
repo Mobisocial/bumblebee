@@ -23,7 +23,10 @@ import java.util.Random;
 import java.util.TreeMap;
 
 import mobisocial.socialkit.DungbeetleObjEncoder;
+import mobisocial.socialkit.EncodedObj;
+import mobisocial.socialkit.ObjEncodingException;
 import mobisocial.socialkit.PreparedObj;
+import mobisocial.socialkit.SignedObj;
 import mobisocial.socialkit.User;
 
 import com.rabbitmq.client.AMQP.BasicProperties;
@@ -184,9 +187,9 @@ public class RabbitMQMessengerService extends MessengerService {
 										byte[] cyphered;
 	                                    List<RSAPublicKey> keys;
 										try {
-										    System.out.println("Sending msg " + m.contents());
+										    System.out.println("Sending msg contents: " + m.contents());
 										    keys = DungbeetleObjEncoder.getPublicKeys(m.contents().getRecipients());
-											cyphered = mFormat.encodeOutgoingMessage(m);
+											cyphered = mFormat.encodeOutgoingMessage(m).getEncoded();
 					                    } catch(Exception e) {
 											//TODO: should mark committed?
 
@@ -291,35 +294,34 @@ public class RabbitMQMessengerService extends MessengerService {
 							            	continue next_message;
 							            }
 					
-					                    final String id = mFormat.getMessagePersonId(body);
+					                    /*final String id = mFormat.getMessagePersonId(ident);
 					                    if (id == null) {
 					                        System.err.println("WTF! person id in message does not match sender!.");
 							            	inChannel.basicReject(delivery.getEnvelope().getDeliveryTag(), false);
 							            	continue next_message;
-					                    }
-					                    final String contents;
+					                    }*/
+					                    final SignedObj contents;
 					                    try {
 						                    contents = mFormat.decodeIncomingMessage(body);
-					                    } catch(CryptoException e) {
-											signalConnectionStatus("Failed to handle message crypto", e);
+					                    } catch(ObjEncodingException e) {
+											signalConnectionStatus("Failed to handle message encoding", e);
 											//a crypto exception will just keep happening, we need to cancel the message
 							            	inChannel.basicReject(delivery.getEnvelope().getDeliveryTag(), false);
 							            	continue next_message;
 					                    }
-			                        	long msghash;
-										try {
-											msghash = mFormat.extractHash(body);
-										} catch (CryptoException e) {
-											msghash = new Random().nextLong();
-										} 
-										final long fmsghash = msghash;
 					                    signalMessageReceived(
 					                        new IncomingMessage() {
-					                            public String from() { return id; }
-					                            public String contents() { return contents; }
-					                            public String toString() { return contents(); }
+					                            public String from() { return contents.getSender().getId(); }
+					                            public SignedObj contents() { return contents; }
+					                            public String toString() {
+					                                StringBuilder b = new StringBuilder("[");
+					                                b.append("type: ").append(contents.getType())
+					                                .append(", json: " + contents.getJson());
+					                                b.append("]");
+					                                return b.toString();
+					                            }
 					                            public long hash() {
-					                            	return fmsghash;
+					                            	return contents.getHash();
 					                            }
 					                        });
 							            inChannel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
@@ -508,13 +510,13 @@ public class RabbitMQMessengerService extends MessengerService {
 				for(;;) {
 					final byte[] message = inputStreamToByteArray(System.in);
 					ms.sendMessage(new OutgoingMessage() {
-						byte[] mEncoded;
+					    EncodedObj mEncoded;
 						
 						public List<RSAPublicKey> toPublicKeys() {
 							return to;
 						}
 						
-						public void onEncoded(byte[] encoded) {
+						public void onEncoded(EncodedObj encoded) {
 							mEncoded = encoded;
 						}
 						
@@ -528,7 +530,7 @@ public class RabbitMQMessengerService extends MessengerService {
 							return 0;
 						}
 						
-						public byte[] getEncoded() {
+						public EncodedObj getEncoded() {
 							return mEncoded;
 						}
 						

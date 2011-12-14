@@ -4,6 +4,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,7 +34,6 @@ import org.json.JSONObject;
 
 import edu.stanford.mobisocial.bumblebee.CryptoException;
 import edu.stanford.mobisocial.bumblebee.TransportIdentityProvider;
-import edu.stanford.mobisocial.bumblebee.util.Util;
 
 /**
  * Encodes/decodes objects in the classic Dungbeetle format.
@@ -212,7 +214,7 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
                     short keyLen = in.readShort();
                     in.skipBytes(keyLen);
                 } else {
-                    if (Util.bytesEqual(s, bi.getPos(), userPidBytes, 0, idLen)) {
+                    if (bytesEqual(s, bi.getPos(), userPidBytes, 0, idLen)) {
                         in.skipBytes(idLen);
                         short keyLen = in.readShort();
                         keyBytesE = new byte[keyLen];
@@ -258,7 +260,7 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
             cipher.init(Cipher.DECRYPT_MODE, aeskeySpec, ivspec);
             is = new CipherInputStream(in, cipher);
             ByteArrayOutputStream plainOut = new ByteArrayOutputStream();
-            Util.copy(is, plainOut);
+            copy(is, plainOut);
             is.close();
 
             byte[] plainBytes = plainOut.toByteArray();
@@ -268,6 +270,30 @@ public class DungbeetleObjEncoder implements ObjEncoder<DungbeetleEncodedObj> {
             e.printStackTrace();
             throw new ObjEncodingException(e.getMessage());
         }
+    }
+
+    /**
+     * Copies a stream.
+     */
+    private static final void copy(InputStream is, OutputStream os) throws IOException {
+        int i;
+        byte[] b = new byte[1024];
+        while ((i=is.read(b))!=-1) {
+            os.write(b, 0, i);
+        }
+    }
+
+    /**
+     * Return true if the byte ranges are identical.
+     */
+    private static final boolean bytesEqual(final byte[] b1, final int j, final byte[] b2,
+            final int k, final int len){
+        for (int i = 0; i < len; i++){
+            if (b1[i + j] != b2[i + k]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private byte[] objAsByteArray(PreparedObj obj) {

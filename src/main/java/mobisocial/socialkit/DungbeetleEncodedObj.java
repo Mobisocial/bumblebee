@@ -5,9 +5,7 @@ import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
 
-import edu.stanford.mobisocial.bumblebee.TransportIdentityProvider;
-
-public class DungbeetleEncodedObj implements EncodedObj {
+public final class DungbeetleEncodedObj implements EncodedObj {
     private final byte[] mEncoding;
 
     DungbeetleEncodedObj(byte[] encoding) {
@@ -38,9 +36,17 @@ public class DungbeetleEncodedObj implements EncodedObj {
         }
     }
 
+    public byte[] getSignature() {
+        ByteBuffer buf = ByteBuffer.wrap(mEncoding);
+        short sigLen = buf.getShort(2);
+        byte[] bytes = new byte[8];
+        buf.get(bytes, 0, sigLen);
+        return bytes;
+    }
+
     public long getHash() {
         ByteBuffer buf = ByteBuffer.wrap(mEncoding);
-        buf.position(2); // signature length
+        buf.position(2);
         return buf.getLong();
     }
 }
